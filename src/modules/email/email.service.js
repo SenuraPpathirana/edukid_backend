@@ -10,22 +10,31 @@ const createTransporter = () => {
     process.env.EMAIL_USER !== 'your-email@gmail.com' &&
     process.env.EMAIL_PASS !== 'your-app-password';
 
-  if (!isConfigured) {
-    console.warn('⚠️  Email not configured. OTPs will be shown in console and API response.');
+  // Force console mode in production if EMAIL_MODE is set to console
+  // This is useful for Render which blocks SMTP ports
+  if (process.env.EMAIL_MODE === 'console' || !isConfigured) {
+    console.warn('⚠️  Email running in CONSOLE mode. OTPs will be shown in logs.');
     return null;
   }
 
   // For development, you can use Gmail or other SMTP service
   // For Gmail: Enable 2FA and create an App Password
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+  try {
+    return nodemailer.createTransport({
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to create email transporter, using console mode:', error.message);
+    return null;
+  }
 };
 
 // Send email verification OTP
