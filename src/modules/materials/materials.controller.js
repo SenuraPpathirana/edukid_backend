@@ -46,6 +46,35 @@ const getMaterials = async (req, res) => {
 };
 
 /**
+ * Get single material by ID
+ * GET /api/materials/:id
+ */
+const getMaterialById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const material = await materialsService.getMaterialById(id);
+
+    if (!material) {
+      return res.status(404).json({
+        message: "Material not found",
+      });
+    }
+
+    res.status(200).json({
+      message: "Material retrieved successfully",
+      material,
+    });
+  } catch (error) {
+    console.error("Get material by ID error:", error);
+    res.status(500).json({
+      message: "Failed to retrieve material",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Upload new learning material
  * POST /api/materials
  */
@@ -143,6 +172,50 @@ const uploadMaterialFile = async (req, res) => {
 };
 
 /**
+ * Update a learning material
+ * PUT /api/materials/:id
+ */
+const updateMaterial = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, type, file_url, grade, subject, language, access_level } = req.body;
+
+    console.log('📝 Updating material:', { id, title, type, grade, subject, language, access_level });
+
+    if (!title || !description || !file_url) {
+      console.log('❌ Validation failed: Missing required fields');
+      return res.status(400).json({ message: "Title, description, and file URL are required" });
+    }
+
+    const materialData = {
+      title,
+      description,
+      type,
+      file_url,
+      grade,
+      subject,
+      language,
+      access_level,
+    };
+
+    const material = await materialsService.updateMaterial(id, materialData);
+
+    console.log('✅ Material updated successfully:', id);
+
+    res.status(200).json({
+      message: "Material updated successfully",
+      material,
+    });
+  } catch (error) {
+    console.error("❌ Update material error:", error);
+    res.status(500).json({
+      message: "Failed to update material",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Delete a learning material
  * DELETE /api/materials/:id
  */
@@ -198,4 +271,4 @@ const recordMaterialAccess = async (req, res) => {
   }
 };
 
-export { getMaterials, uploadMaterialFile, uploadMaterial, deleteMaterial, recordMaterialAccess };
+export { getMaterials, getMaterialById, uploadMaterialFile, uploadMaterial, updateMaterial, deleteMaterial, recordMaterialAccess };

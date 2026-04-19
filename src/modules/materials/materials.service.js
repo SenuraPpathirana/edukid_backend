@@ -28,6 +28,42 @@ const buildGradeVariants = (gradeValue) => {
 };
 
 /**
+ * Get single material by ID
+ * @param {string} materialId - Material ID
+ * @returns {Promise<object>} Material
+ */
+const getMaterialById = async (materialId) => {
+  try {
+    const { data, error } = await supabase
+      .from("learning_materials")
+      .select("*")
+      .eq("material_id", materialId)
+      .single();
+
+    if (error) throw new Error(`Failed to fetch material: ${error.message}`);
+
+    if (!data) return null;
+
+    // Transform to match frontend expectations
+    return {
+      material_id: data.material_id,
+      title: data.title,
+      description: data.description,
+      subject: data.subject || 'General',
+      grade: data.grade,
+      language: data.language,
+      access_type: data.access_type || 'Free',
+      type: data.file_url?.split('.').pop()?.toUpperCase() || 'PDF',
+      downloads: 0,
+      uploaded_at: data.uploaded_date,
+      file_url: data.file_url,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Get all learning materials
  * @param {object} filters - Optional filters (type, grade, subject)
  * @returns {Promise<Array>} Array of materials
@@ -103,6 +139,45 @@ const uploadMaterial = async (materialData) => {
       .single();
 
     if (error) throw new Error(`Failed to upload material: ${error.message}`);
+
+    return {
+      material_id: data.material_id,
+      title: data.title,
+      description: data.description,
+      type: materialData.type,
+      downloads: 0,
+      uploaded_at: data.uploaded_date,
+      file_url: data.file_url,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Update a learning material
+ * @param {string} materialId - Material ID
+ * @param {object} materialData - Material information to update
+ * @returns {Promise<object>} Updated material
+ */
+const updateMaterial = async (materialId, materialData) => {
+  try {
+    const { data, error } = await supabase
+      .from("learning_materials")
+      .update({
+        title: materialData.title,
+        description: materialData.description,
+        subject: materialData.subject || "General",
+        grade: materialData.grade,
+        language: materialData.language || "English",
+        access_type: materialData.access_level === "premium" ? "Premium" : (materialData.access_level === "free" ? "Free" : (materialData.access_level || "Free")),
+        file_url: materialData.file_url,
+      })
+      .eq("material_id", materialId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to update material: ${error.message}`);
 
     return {
       material_id: data.material_id,
@@ -225,4 +300,4 @@ const recordMaterialAccess = async (
   }
 };
 
-export { getMaterials, uploadMaterial, deleteMaterial, recordMaterialAccess };
+export { getMaterials, getMaterialById, uploadMaterial, updateMaterial, deleteMaterial, recordMaterialAccess };

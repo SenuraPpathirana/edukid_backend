@@ -31,6 +31,9 @@ router.patch('/invites/:inviteId/deactivate', adminController.deactivateInvite);
 // Get all users
 router.get('/users', adminController.getAllUsers);
 
+// Create a new user
+router.post('/users', adminController.createUser);
+
 export default router;
 
 

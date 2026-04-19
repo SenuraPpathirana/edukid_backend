@@ -198,6 +198,32 @@ const deactivateInvite = async (req, res) => {
 };
 
 /**
+ * Create a new user
+ * POST /api/admin/users
+ */
+const createUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+    
+    const user = await adminService.createUser(email, password);
+    
+    res.status(201).json({
+      message: 'User created successfully',
+      user,
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(400).json({
+      message: error.message || 'Failed to create user',
+    });
+  }
+};
+
+/**
  * Get all users
  * GET /api/admin/users
  */
@@ -226,6 +252,7 @@ export {
   processRequest,
   getInvites,
   deactivateInvite,
+  createUser,
   getAllUsers,
 };
 

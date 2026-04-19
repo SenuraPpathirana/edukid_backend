@@ -226,6 +226,101 @@ const createQuiz = async (quizData, questions = []) => {
 };
 
 /**
+ * Update a quiz with questions and answers
+ * @param {string} quizId - Quiz ID
+ * @param {object} quizData - Quiz information to update
+ * @param {Array} questions - Array of questions with answers (optional)
+ * @returns {Promise<object>} Updated quiz
+ */
+const updateQuiz = async (quizId, quizData, questions = null) => {
+  try {
+    // 1. Update quiz
+    const { data: quiz, error: quizError } = await supabase
+      .from("quiz")
+      .update({
+        title: quizData.title,
+        score: quizData.score, // Use score field directly
+        subject: quizData.subject || "General",
+        grade: quizData.grade,
+        language: quizData.language,
+        access_type: quizData.access_level === "premium" ? "Premium" : "Free",
+      })
+      .eq("quiz_id", quizId)
+      .select()
+      .single();
+
+    if (quizError) throw new Error(`Failed to update quiz: ${quizError.message}`);
+
+    // 2. If questions are provided, delete old questions and insert new ones
+    if (questions && questions.length > 0) {
+      // Delete old questions (cascade will delete answers)
+      const { error: deleteQuestionsError } = await supabase
+        .from("question")
+        .delete()
+        .eq("quiz_id", quizId);
+
+      if (deleteQuestionsError) {
+        console.error('Failed to delete old questions:', deleteQuestionsError);
+      }
+
+      // Insert new questions and answers
+      let insertedQuestionCount = 0;
+      for (let i = 0; i < questions.length; i++) {
+        const question = questions[i];
+        const question_id = `${quizId}-Q${i + 1}`;
+
+        // Insert question
+        const { error: questionError } = await supabase
+          .from("question")
+          .insert([{
+            question_id: question_id,
+            quiz_id: quizId,
+            question_text: question.text || question.question_text,
+          }]);
+
+        if (questionError) {
+          console.error(`Failed to insert question ${i + 1}:`, questionError);
+          continue;
+        }
+
+        insertedQuestionCount++;
+
+        // Insert answers for this question
+        if (question.answers && question.answers.length > 0) {
+          const answersToInsert = question.answers.map((answer, j) => ({
+            option_id: `${question_id}-A${j + 1}`,
+            question_id: question_id,
+            option_text: answer.text || answer.option_text,
+            correct_option: answer.isCorrect || answer.correct_option || false,
+            option_count: 0,
+          }));
+
+          const { error: answersError } = await supabase
+            .from("answer")
+            .insert(answersToInsert);
+
+          if (answersError) {
+            console.error(`Failed to insert answers for question ${i + 1}:`, answersError);
+          }
+        }
+      }
+
+      // Update quiz score to reflect the max achievable score (if not manually set)
+      if (insertedQuestionCount > 0 && !quizData.score) {
+        await supabase
+          .from("quiz")
+          .update({ score: insertedQuestionCount })
+          .eq("quiz_id", quizId);
+      }
+    }
+
+    return quiz;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Delete a quiz
  * @param {string} quizId - Quiz ID
  * @returns {Promise<void>}
@@ -476,4 +571,4 @@ const submitQuizResult = async (kidId, quizId, score, totalQuestions, userId) =>
   }
 };
 
-export { getQuizzes, createQuiz, deleteQuiz, getQuizWithQuestions, startQuizSession, submitQuizResult };
+export { getQuizzes, createQuiz, updateQuiz, deleteQuiz, getQuizWithQuestions, startQuizSession, submitQuizResult };

@@ -369,6 +369,62 @@ const deactivateInvite = async (inviteId) => {
 };
 
 /**
+ * Create a new user with email and password
+ * @param {string} email - User email
+ * @param {string} password - Temporary password
+ * @returns {Promise<object>}
+ */
+const createUser = async (email, password) => {
+  try {
+    // Check if email already exists
+    const { data: existingUser, error: checkError } = await supabase
+      .from('user')
+      .select('user_id')
+      .eq('email', email)
+      .maybeSingle();
+    
+    if (checkError) {
+      throw new Error(`Failed to check existing user: ${checkError.message}`);
+    }
+    
+    if (existingUser) {
+      throw new Error('Email already exists');
+    }
+    
+    // Hash the password
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Generate user ID
+    const user_id = `USER-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Create user
+    const { data: user, error: createError } = await supabase
+      .from('user')
+      .insert({
+        user_id,
+        email,
+        password_hash: passwordHash,
+        fname: email.split('@')[0], // Use email prefix as default first name
+        lname: '',
+        role: 'user',
+        is_verified: true, // Admin-created users are pre-verified
+        account_status: 'Active',
+        join_date: new Date().toISOString().split('T')[0],
+      })
+      .select('user_id, email, fname, lname, role, is_verified, join_date')
+      .single();
+    
+    if (createError) {
+      throw new Error(`Failed to create user: ${createError.message}`);
+    }
+    
+    return user;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Get all users with their admin requests
  * @returns {Promise<Array>}
  */
@@ -411,6 +467,7 @@ export {
   processAdminRequest,
   getAdminInvites,
   deactivateInvite,
+  createUser,
   getAllUsers,
 };
 

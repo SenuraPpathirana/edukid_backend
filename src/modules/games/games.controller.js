@@ -54,6 +54,35 @@ const getGames = async (req, res) => {
 };
 
 /**
+ * Get single game by ID
+ * GET /api/games/:id
+ */
+const getGameById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const game = await gamesService.getGameById(id);
+
+    if (!game) {
+      return res.status(404).json({
+        message: "Game not found",
+      });
+    }
+
+    res.status(200).json({
+      message: "Game retrieved successfully",
+      game,
+    });
+  } catch (error) {
+    console.error("Get game by ID error:", error);
+    res.status(500).json({
+      message: "Failed to retrieve game",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Add new game
  * POST /api/games
  */
@@ -153,6 +182,52 @@ const uploadGameFile = async (req, res) => {
 };
 
 /**
+ * Update a game
+ * PUT /api/games/:id
+ */
+const updateGame = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, time_limit, maximum_score, difficulty_level, grade, subject, access_level, language, game_url } = req.body;
+
+    console.log('🎮 Updating game:', { id, title, grade, subject, language, access_level });
+
+    if (!title || !description || !game_url) {
+      console.log('❌ Validation failed: Missing required fields');
+      return res.status(400).json({ message: "Title, description, and game URL are required" });
+    }
+
+    const gameData = {
+      title,
+      description,
+      time_limit: parseInt(time_limit),
+      maximum_score: parseInt(maximum_score),
+      difficulty_level,
+      grade,
+      subject,
+      access_level,
+      language,
+      game_url,
+    };
+
+    const game = await gamesService.updateGame(id, gameData);
+
+    console.log('✅ Game updated successfully:', id);
+
+    res.status(200).json({
+      message: "Game updated successfully",
+      game,
+    });
+  } catch (error) {
+    console.error("❌ Update game error:", error);
+    res.status(500).json({
+      message: "Failed to update game",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Delete a game
  * DELETE /api/games/:id
  */
@@ -240,4 +315,4 @@ const submitGameResult = async (req, res) => {
   }
 };
 
-export { getGames, uploadGameFile, addGame, deleteGame, startGameSession, submitGameResult };
+export { getGames, getGameById, uploadGameFile, addGame, updateGame, deleteGame, startGameSession, submitGameResult };

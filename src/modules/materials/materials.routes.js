@@ -15,6 +15,9 @@ router.use(authenticate);
 // Get all learning materials
 router.get("/", materialsController.getMaterials);
 
+// Get single material by ID
+router.get("/:id", materialsController.getMaterialById);
+
 // Record material access
 router.post("/:id/access", materialsController.recordMaterialAccess);
 
@@ -23,6 +26,9 @@ router.post("/upload-file", upload.single("file"), materialsController.uploadMat
 
 // Upload new learning material
 router.post("/", materialsController.uploadMaterial);
+
+// Update a learning material
+router.put("/:id", materialsController.updateMaterial);
 
 // Delete a learning material
 router.delete("/:id", materialsController.deleteMaterial);

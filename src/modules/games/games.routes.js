@@ -15,6 +15,9 @@ router.use(authenticate);
 // Get all games
 router.get("/", gamesController.getGames);
 
+// Get single game by ID
+router.get("/:id", gamesController.getGameById);
+
 // Start game session
 router.post("/:id/start", gamesController.startGameSession);
 
@@ -26,6 +29,9 @@ router.post("/upload-file", upload.single("file"), gamesController.uploadGameFil
 
 // Add new game
 router.post("/", gamesController.addGame);
+
+// Update a game
+router.put("/:id", gamesController.updateGame);
 
 // Delete a game
 router.delete("/:id", gamesController.deleteGame);

@@ -95,6 +95,27 @@ const calculateTotalTimeForKid = async (kidId) => {
 };
 
 /**
+ * Get single game by ID
+ * @param {string} gameId - Game ID
+ * @returns {Promise<object>} Game
+ */
+const getGameById = async (gameId) => {
+  try {
+    const { data, error } = await supabase
+      .from("game")
+      .select("*")
+      .eq("game_id", gameId)
+      .single();
+
+    if (error) throw new Error(`Failed to fetch game: ${error.message}`);
+
+    return data || null;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Get all games
  * @param {object} filters - Optional filters (grade, subject)
  * @returns {Promise<Array>} Array of games
@@ -156,6 +177,38 @@ const addGame = async (gameData) => {
       .single();
 
     if (error) throw new Error(`Failed to add game: ${error.message}`);
+
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Update a game
+ * @param {string} gameId - Game ID
+ * @param {object} gameData - Game information to update
+ * @returns {Promise<object>} Updated game
+ */
+const updateGame = async (gameId, gameData) => {
+  try {
+    const { data, error } = await supabase
+      .from("game")
+      .update({
+        title: gameData.title,
+        description: gameData.description,
+        subject: gameData.subject || "General",
+        grade: gameData.grade,
+        language: gameData.language,
+        access_type: gameData.access_level === "premium" ? "Premium" : "Free",
+        file_url: gameData.game_url,
+        max_score: parseInt(gameData.maximum_score) || 100,
+      })
+      .eq("game_id", gameId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to update game: ${error.message}`);
 
     return data;
   } catch (error) {
@@ -362,4 +415,4 @@ const submitGameResult = async (gameId, kidId, score = 0, attempts = 1, userId) 
   }
 };
 
-export { getGames, addGame, deleteGame, startGameSession, submitGameResult };
+export { getGames, getGameById, addGame, updateGame, deleteGame, startGameSession, submitGameResult };

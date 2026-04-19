@@ -202,7 +202,7 @@ export const getUserSubscriptions = async (req, res) => {
   }
 };
 
-// Get active subscription
+// Get active subscription(s) with all premium kids
 export const getActiveSubscription = async (req, res) => {
   try {
     const user_id = req.user?.user_id;
@@ -211,20 +211,58 @@ export const getActiveSubscription = async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { data, error } = await supabase
+    // Get all active subscriptions for the user
+    const { data: subscriptions, error } = await supabase
       .from("subscription")
       .select("*")
       .eq("user_id", user_id)
       .eq("is_active", true)
-      .order("subscribed_date", { ascending: false })
-      .limit(1)
-      .single();
+      .order("subscribed_date", { ascending: false });
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       throw error;
     }
 
-    res.json({ subscription: data || null });
+    // If no subscriptions, return empty
+    if (!subscriptions || subscriptions.length === 0) {
+      return res.json({ subscription: null, subscriptions: [], kids: [] });
+    }
+
+    // Get all premium kid profiles for this user (regardless of subscription_ID)
+    const { data: allKids, error: kidsError } = await supabase
+      .from("kid_profile")
+      .select("kid_id, fname, lname, grade, age, medium, premium_status, subscription_ID")
+      .eq("user_id", user_id)
+      .in("premium_status", ["Premium", "active"]);
+
+    if (kidsError) {
+      console.error("Error fetching premium kids:", kidsError);
+    }
+
+    // Group kids by subscription_ID
+    const kidsGroupedBySubscription = (allKids || []).reduce((acc, kid) => {
+      if (kid.subscription_ID) {
+        if (!acc[kid.subscription_ID]) {
+          acc[kid.subscription_ID] = [];
+        }
+        acc[kid.subscription_ID].push(kid);
+      }
+      return acc;
+    }, {});
+
+    // Attach kids to their respective subscriptions
+    const subscriptionsWithKids = subscriptions.map(sub => ({
+      ...sub,
+      kids: kidsGroupedBySubscription[sub.subscription_id] || []
+    }));
+
+    // Return the primary (most recent) subscription for backward compatibility
+    // and all subscriptions with their kids
+    res.json({ 
+      subscription: subscriptions[0] || null,
+      subscriptions: subscriptionsWithKids,
+      kids: allKids || []
+    });
   } catch (error) {
     console.error("Error fetching active subscription:", error);
     res.status(500).json({ error: error.message });
@@ -444,34 +482,118 @@ export const cancelSubscription = async (req, res) => {
       return res.status(403).json({ error: "Unauthorized" });
     }
 
-    // Mark subscription as inactive (keep payment_status unchanged)
-    const { data, error } = await supabase
-      .from("subscription")
-      .update({ is_active: false })
-      .eq("subscription_id", subscription_id)
-      .select()
-      .single();
+    // If kid_ids are provided, only cancel those specific kids
+    if (kid_ids && Array.isArray(kid_ids) && kid_ids.length > 0) {
+      // Downgrade only selected kid profiles
+      const { error: kidErr } = await supabase
+        .from("kid_profile")
+        .update({ premium_status: "Free", "subscription_ID": null })
+        .in("kid_id", kid_ids)
+        .eq("subscription_ID", subscription_id);
+      
+      if (kidErr) {
+        console.error("Warning: could not downgrade selected kid profiles:", kidErr.message);
+      }
 
-    if (error) throw error;
+      // Check if there are any remaining premium kids for this subscription
+      const { data: remainingKids, error: remainingErr } = await supabase
+        .from("kid_profile")
+        .select("kid_id")
+        .eq("subscription_ID", subscription_id)
+        .eq("premium_status", "Premium");
 
-    // Reset user account_status back to Active
-    const { error: userError } = await supabase
-      .from("user")
-      .update({ account_status: "Active" })
-      .eq("user_id", subData.user_id);
+      if (remainingErr) {
+        console.error("Warning: could not check remaining kids:", remainingErr.message);
+      }
 
-    if (userError) console.error("Warning: could not reset user account_status:", userError.message);
+      // If no premium kids remain, mark subscription as inactive and save reason
+      if (!remainingKids || remainingKids.length === 0) {
+        const updateData = { is_active: false };
+        if (reason) {
+          updateData.Unsubscribe_reasons = reason;
+        }
 
-    // Downgrade kid profiles linked to this subscription and unlink them
-    const { error: kidErr } = await supabase
-      .from("kid_profile")
-      .update({ premium_status: "Free", "subscription_ID": null })
-      .eq("subscription_ID", subscription_id);
-    if (kidErr) console.error("Warning: could not downgrade kid profiles:", kidErr.message);
+        const { data, error } = await supabase
+          .from("subscription")
+          .update(updateData)
+          .eq("subscription_id", subscription_id)
+          .select()
+          .single();
 
-    if (reason) console.log(`🗑️ Subscription ${subscription_id} cancelled. Reason: ${reason}`);
+        if (error) throw error;
 
-    res.json({ message: "Subscription cancelled", subscription: data });
+        // Reset user account_status back to Active
+        const { error: userError } = await supabase
+          .from("user")
+          .update({ account_status: "Active" })
+          .eq("user_id", subData.user_id);
+
+        if (userError) console.error("Warning: could not reset user account_status:", userError.message);
+
+        if (reason) console.log(`🗑️ Subscription ${subscription_id} fully cancelled. Reason: ${reason}`);
+        
+        return res.json({ 
+          message: "Subscription cancelled for selected profiles. All premium profiles removed.", 
+          subscription: data,
+          cancelled_kids: kid_ids.length
+        });
+      } else {
+        // Partial cancellation - save reason but keep subscription active
+        if (reason) {
+          const { error: reasonError } = await supabase
+            .from("subscription")
+            .update({ Unsubscribe_reasons: reason })
+            .eq("subscription_id", subscription_id);
+          
+          if (reasonError) {
+            console.error("Warning: could not save unsubscribe reason:", reasonError.message);
+          }
+        }
+
+        if (reason) console.log(`🗑️ Subscription ${subscription_id} partially cancelled for ${kid_ids.length} kid(s). Reason: ${reason}`);
+        
+        return res.json({ 
+          message: `Premium access removed from ${kid_ids.length} profile(s). ${remainingKids.length} profile(s) remain premium.`,
+          cancelled_kids: kid_ids.length,
+          remaining_kids: remainingKids.length
+        });
+      }
+    } else {
+      // Original behavior: cancel entire subscription
+      // Mark subscription as inactive and save reason
+      const updateData = { is_active: false };
+      if (reason) {
+        updateData.Unsubscribe_reasons = reason;
+      }
+
+      const { data, error } = await supabase
+        .from("subscription")
+        .update(updateData)
+        .eq("subscription_id", subscription_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Reset user account_status back to Active
+      const { error: userError } = await supabase
+        .from("user")
+        .update({ account_status: "Active" })
+        .eq("user_id", subData.user_id);
+
+      if (userError) console.error("Warning: could not reset user account_status:", userError.message);
+
+      // Downgrade all kid profiles linked to this subscription and unlink them
+      const { error: kidErr } = await supabase
+        .from("kid_profile")
+        .update({ premium_status: "Free", "subscription_ID": null })
+        .eq("subscription_ID", subscription_id);
+      if (kidErr) console.error("Warning: could not downgrade kid profiles:", kidErr.message);
+
+      if (reason) console.log(`🗑️ Subscription ${subscription_id} cancelled. Reason: ${reason}`);
+
+      res.json({ message: "Subscription cancelled", subscription: data });
+    }
   } catch (error) {
     console.error("Error cancelling subscription:", error);
     res.status(500).json({ error: error.message });

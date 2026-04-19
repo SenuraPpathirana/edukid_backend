@@ -76,6 +76,48 @@ const createQuiz = async (req, res) => {
 };
 
 /**
+ * Update a quiz
+ * PUT /api/quizzes/:id
+ */
+const updateQuiz = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, passing_score, grade, subject, access_level, language, questions } = req.body;
+
+    console.log('📚 Updating quiz:', { id, title, grade, subject, language, access_level, questionCount: questions?.length || 0 });
+
+    if (!title || !passing_score) {
+      console.log('❌ Validation failed: Missing required fields');
+      return res.status(400).json({ message: "Title and passing score are required" });
+    }
+
+    const quizData = {
+      title,
+      score: parseInt(passing_score), // Map passing_score to score field
+      grade,
+      subject,
+      access_level,
+      language,
+    };
+
+    const quiz = await quizzesService.updateQuiz(id, quizData, questions);
+
+    console.log('✅ Quiz updated successfully:', id, `with ${questions?.length || 0} questions`);
+
+    res.status(200).json({
+      message: "Quiz updated successfully",
+      quiz,
+    });
+  } catch (error) {
+    console.error("❌ Update quiz error:", error);
+    res.status(500).json({
+      message: "Failed to update quiz",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * Delete a quiz
  * DELETE /api/quizzes/:id
  */
@@ -192,4 +234,4 @@ const submitQuizResult = async (req, res) => {
   }
 };
 
-export { getQuizzes, createQuiz, deleteQuiz, getQuizWithQuestions, startQuizSession, submitQuizResult };
+export { getQuizzes, createQuiz, updateQuiz, deleteQuiz, getQuizWithQuestions, startQuizSession, submitQuizResult };

@@ -22,6 +22,9 @@ router.post("/:id/submit", quizzesController.submitQuizResult);
 // Create new quiz
 router.post("/", quizzesController.createQuiz);
 
+// Update a quiz
+router.put("/:id", quizzesController.updateQuiz);
+
 // Delete a quiz
 router.delete("/:id", quizzesController.deleteQuiz);
 
