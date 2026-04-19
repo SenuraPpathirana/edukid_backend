@@ -85,7 +85,7 @@ const getMaterials = async (filters = {}) => {
       query = query.eq("subject", filters.subject);
     }
     if (filters.language) {
-      query = query.eq("language", filters.language);
+      query = query.ilike("language", filters.language);
     }
 
     const { data, error } = await query;

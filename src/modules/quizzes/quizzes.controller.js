@@ -14,7 +14,11 @@ const getQuizzes = async (req, res) => {
     };
     const kidId = req.query.kid_id || null;
 
+    console.log('🔍 Fetching quizzes with filters:', filters, 'kidId:', kidId);
+
     const quizzes = await quizzesService.getQuizzes(filters, kidId);
+    
+    console.log('✅ Found', quizzes.length, 'quizzes');
 
     res.status(200).json({
       message: "Quizzes retrieved successfully",

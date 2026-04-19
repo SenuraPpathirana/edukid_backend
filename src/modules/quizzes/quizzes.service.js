@@ -4,8 +4,27 @@ const buildGradeVariants = (gradeValue) => {
   const raw = String(gradeValue || "").trim();
   if (!raw) return [];
 
-  const normalized = raw.toLowerCase().startsWith("grade ") ? raw.slice(6).trim() : raw;
-  return Array.from(new Set([raw, normalized, `Grade ${normalized}`]));
+  const lower = raw.toLowerCase();
+  const compact = lower.replace(/[_\s]+/g, "-");
+
+  const numericMatch = compact.match(/(\d+)/);
+  const gradeNumber = numericMatch ? numericMatch[1] : "";
+
+  const variants = new Set([
+    raw,
+    lower,
+    compact,
+  ]);
+
+  if (gradeNumber) {
+    variants.add(gradeNumber);
+    variants.add(`grade-${gradeNumber}`);
+    variants.add(`grade ${gradeNumber}`);
+    variants.add(`Grade ${gradeNumber}`);
+    variants.add(`grade_${gradeNumber}`);
+  }
+
+  return Array.from(variants);
 };
 
 const getDurationSeconds = (startTime, endTime) => {
@@ -82,6 +101,8 @@ const calculateTotalTimeForKid = async (kidId) => {
  */
 const getQuizzes = async (filters = {}, kidId = null) => {
   try {
+    console.log('🔍 Quiz service - filters:', JSON.stringify(filters), 'kidId:', kidId);
+    
     let query = supabase
       .from("quiz")
       .select("*")
@@ -89,20 +110,28 @@ const getQuizzes = async (filters = {}, kidId = null) => {
 
     if (filters.grade) {
       const gradeVariants = buildGradeVariants(filters.grade);
+      console.log('📊 Grade variants for', filters.grade, ':', gradeVariants);
       query = gradeVariants.length > 1
         ? query.in("grade", gradeVariants)
         : query.eq("grade", gradeVariants[0]);
     }
     if (filters.subject) {
+      console.log('📚 Filtering by subject:', filters.subject);
       query = query.eq("subject", filters.subject);
     }
     if (filters.language) {
-      query = query.eq("language", filters.language);
+      console.log('🌐 Filtering by language (ilike):', filters.language);
+      query = query.ilike("language", filters.language);
     }
 
     const { data, error } = await query;
 
     if (error) throw new Error(`Failed to fetch quizzes: ${error.message}`);
+
+    console.log('✅ Quiz query returned', (data || []).length, 'results');
+    if (data && data.length > 0) {
+      console.log('📋 Sample quiz:', JSON.stringify(data[0]));
+    }
 
     let quizzes = data || [];
 
